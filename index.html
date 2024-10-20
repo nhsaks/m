@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Profit/Loss & Liquidation Calculator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .slider-container {
+            margin-top: 10px;
+        }
+
+        input[type=range] {
+            width: 100%;
+        }
+
+        .readonly-input {
+            background-color: #e9ecef;
+        }
+    </style>
+</head>
+<body class="bg-light">
+<div class="container py-4">
+    <div class="card">
+        <div class="card-body">
+            <h3 class="text-center py-2">Crypto Profit/Loss & Liquidation Calculator</h3>
+            <form id="profitCalcForm">
+                <div class="row">
+                    
+
+                    <!-- Buy Rate -->
+                    <div class="col-md-4">
+                        <label for="cryptoBuyRate" class="form-label">Buy Rate ($)</label>
+                        <input type="number" class="form-control" id="cryptoBuyRate" value="0" step="0.001">
+                        <div class="slider-container">
+                            <input type="range" id="buyRateSlider" min="0" max="100000" step="0.001" class="form-range">
+                        </div>
+                    </div>
+
+                    <!-- Sell Rate -->
+                    <div class="col-md-4">
+                        <label for="cryptoSellRate" class="form-label">Sell Rate ($)</label>
+                        <input type="number" class="form-control" id="cryptoSellRate" value="0" step="0.001">
+                        <div class="slider-container">
+                            <input type="range" id="sellRateSlider" min="0" max="100000" step="0.001" class="form-range">
+                        </div>
+                    </div>
+
+                    <!-- Leverage Percentage -->
+                    <div class="col-md-4">
+                        <label for="leverage" class="form-label">Leverage (X)</label>
+                        <input type="number" class="form-control" id="leverage" value="1" step="1" min="1" max="100">
+                        <div class="slider-container">
+                            <input type="range" id="leverageSlider" min="1" max="100" step="1" class="form-range">
+                        </div>
+                    </div>
+
+                    <!-- USDT Amount -->
+                    <div class="col-12 mt-3">
+                        <label for="usdtAmount" class="form-label">USDT Amount (Initial Capital)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="usdtAmount" value="100" step="0.01">
+                            <span class="input-group-text">USDT</span>
+                        </div>
+                        <div class="slider-container mt-2">
+                            <input type="range" id="usdtAmountSlider" min="10" max="1000" step="0.01" class="form-range">
+                        </div>
+                    </div>
+
+                    <!-- Liquidation Prices -->
+                    <div class="col-12 mt-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="text-success">Liquidation Price (Buy/Long) ($)</label>
+                                <input type="number" class="form-control readonly-input" id="liquidationBuy" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-danger">Liquidation Price (Sell/Short) ($)</label>
+                                <input type="number" class="form-control readonly-input" id="liquidationSell" readonly>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Profit/Loss Table -->
+                    <div class="col-12 mt-4">
+                        <table class="table table-bordered">
+                        
+                            <tbody>
+                                <tr >
+                                    <th>Profit</th>
+                                    <th id="profitUSDT">0</th>
+                                    <th id="profitPKR">0</th>
+                                </tr>
+                                <tr>
+                                    <td>Buy Fees</td>
+                                    <td id="buyFeesUSDT">0</td>
+                                    <td id="buyFeesPKR">0</td>
+                                </tr>
+                                <tr>
+                                    <td>Sell Fees</td>
+                                    <td id="sellFeesUSDT">0</td>
+                                    <td id="sellFeesPKR">0</td>
+                                </tr>
+                                <tr>
+                                    <td>Total Profit</td>
+                                    <td id="totalProfitUSDT">0</td>
+                                    <td id="totalProfitPKR">0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Throttle function to limit how often a function can run
+    function throttle(func, limit) {
+        let lastFunc;
+        let lastRan;
+        return function(...args) {
+            const context = this;
+            if (!lastRan) {
+                func.apply(context, args);
+                lastRan = Date.now();
+            } else {
+                clearTimeout(lastFunc);
+                lastFunc = setTimeout(function() {
+                    if ((Date.now() - lastRan) >= limit) {
+                        func.apply(context, args);
+                        lastRan = Date.now();
+                    }
+                }, limit - (Date.now() - lastRan));
+            }
+        }
+    }
+
+    // Event listeners for Buy Rate, Sell Rate, Leverage, and USDT sliders and inputs
+    document.getElementById('buyRateSlider').addEventListener('input', function() {
+        const buyRate = this.value;
+        document.getElementById('cryptoBuyRate').value = buyRate;
+        throttledCalculateProfit();
+    });
+
+    document.getElementById('cryptoBuyRate').addEventListener('input', function() {
+        const buyRate = this.value;
+        document.getElementById('buyRateSlider').value = buyRate;
+        throttledCalculateProfit();
+    });
+
+    document.getElementById('sellRateSlider').addEventListener('input', function() {
+        const sellRate = this.value;
+        document.getElementById('cryptoSellRate').value = sellRate;
+        throttledCalculateProfit();
+    });
+
+    document.getElementById('cryptoSellRate').addEventListener('input', function() {
+        const sellRate = this.value;
+        document.getElementById('sellRateSlider').value = sellRate;
+        throttledCalculateProfit();
+    });
+
+    document.getElementById('leverageSlider').addEventListener('input', function() {
+        const leverage = this.value;
+        document.getElementById('leverage').value = leverage;
+        throttledCalculateProfit();
+    });
+
+    document.getElementById('leverage').addEventListener('input', function() {
+        const leverage = this.value;
+        document.getElementById('leverageSlider').value = leverage;
+        throttledCalculateProfit();
+    });
+
+    document.getElementById('usdtAmountSlider').addEventListener('input', function() {
+        const usdtAmount = this.value;
+        document.getElementById('usdtAmount').value = usdtAmount;
+        throttledCalculateProfit();
+    });
+
+    document.getElementById('usdtAmount').addEventListener('input', function() {
+        const usdtAmount = this.value;
+        document.getElementById('usdtAmountSlider').value = usdtAmount;
+        throttledCalculateProfit();
+    });
+
+    // Throttled profit calculation
+    const throttledCalculateProfit = throttle(function() {
+        const buyRate = parseFloat(document.getElementById('cryptoBuyRate').value);
+        const sellRate = parseFloat(document.getElementById('cryptoSellRate').value);
+        const leverage = parseFloat(document.getElementById('leverage').value) || 1;
+        const usdtAmount = parseFloat(document.getElementById('usdtAmount').value);
+        const pkrRate = 283;  // Conversion rate to PKR
+
+        // Leverage factor calculation
+        const leveragedAmount = usdtAmount * leverage;
+
+        // Liquidation price formulas
+        const liquidationBuyPrice = buyRate * (1 - (1 / leverage));  // Long position
+        const liquidationSellPrice = buyRate * (1 + (1 / leverage)); // Short position
+
+        const profitUSDT = ((sellRate - buyRate) * leveragedAmount) / buyRate;
+        const profitPKR = profitUSDT * pkrRate;
+
+        // Display results
+        document.getElementById('liquidationBuy').value = liquidationBuyPrice.toFixed(2);
+        document.getElementById('liquidationSell').value = liquidationSellPrice.toFixed(2);
+
+        document.getElementById('profitUSDT').innerText = profitUSDT.toFixed(2);
+        document.getElementById('profitPKR').innerText = profitPKR.toFixed(2);
+
+        // Total profit can be calculated after considering fees
+        const buyFeesUSDT = 0.001 * leveragedAmount;  // Example fee calculation
+        const sellFeesUSDT = 0.001 * leveragedAmount;
+
+        const totalProfitUSDT = profitUSDT - buyFeesUSDT - sellFeesUSDT;
+        const totalProfitPKR = totalProfitUSDT * pkrRate;
+
+        document.getElementById('buyFeesUSDT').innerText = buyFeesUSDT.toFixed(2);
+        document.getElementById('buyFeesPKR').innerText = (buyFeesUSDT * pkrRate).toFixed(2);
+
+        document.getElementById('sellFeesUSDT').innerText = sellFeesUSDT.toFixed(2);
+        document.getElementById('sellFeesPKR').innerText = (sellFeesUSDT * pkrRate).toFixed(2);
+
+        document.getElementById('totalProfitUSDT').innerText = totalProfitUSDT.toFixed(2);
+        document.getElementById('totalProfitPKR').innerText = totalProfitPKR.toFixed(2);
+
+    }, 300);  // Throttle function limit of 300ms
+
+</script>
+</body>
+</html>
